@@ -1,3 +1,4 @@
+import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
 import type {
   TextMessage,
@@ -41,9 +42,9 @@ export class OpenRouterProvider implements VoiceProvider {
       userInputChars: textInput?.length ?? 0,
     });
 
-    let res: Response;
+    let res: Awaited<ReturnType<typeof expoFetch>>;
     try {
-      res = await fetch(OPENROUTER_CHAT_URL, {
+      res = await expoFetch(OPENROUTER_CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -67,7 +68,10 @@ export class OpenRouterProvider implements VoiceProvider {
       throw new Error("OpenRouter returned no stream body");
     }
 
-    const result = await parseSseStream(res.body, input.callbacks);
+    const result = await parseSseStream(
+      res.body as ReadableStream<Uint8Array>,
+      input.callbacks,
+    );
     return { ...result, transcript: userTranscript };
   }
 
