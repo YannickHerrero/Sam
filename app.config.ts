@@ -32,6 +32,7 @@ const config: ExpoConfig = {
   web: {
     favicon: "./assets/favicon.png",
   },
+  plugins: ["expo-sqlite"],
 };
 
 export default config;
