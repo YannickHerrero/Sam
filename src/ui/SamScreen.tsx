@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { runAgentTurn } from "../agent/loop";
 import { withPersona } from "../agent/persona";
 import { getApiKey, getUserFirstName, getVoice } from "../settings/store";
@@ -24,6 +25,7 @@ export function SamScreen() {
   const onPressIn = useCallback(async () => {
     setError(null);
     try {
+      await activateKeepAwakeAsync("sam-turn");
       await recorder.start();
       setOrbState("listening");
     } catch (e) {
@@ -83,6 +85,7 @@ export function SamScreen() {
       setError(String(e));
     } finally {
       setOrbState("idle");
+      deactivateKeepAwake("sam-turn");
     }
   }, [recorder, appendLine]);
 
