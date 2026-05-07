@@ -1,14 +1,48 @@
 import type { TextMessage } from "../voice/types";
 
+const TZ = "Europe/Paris";
+
 export interface PersonaContext {
   userFirstName?: string | null;
+  now?: Date;
 }
 
 export function buildSystemPrompt(ctx: PersonaContext = {}): string {
   const greetingPart = ctx.userFirstName
     ? `L'utilisateur s'appelle ${ctx.userFirstName}. Tu peux l'appeler par son prénom de temps en temps, sans en abuser.`
     : "Tu n'as pas encore son prénom — n'invente pas et ne l'appelle pas par un nom.";
-  return `${SAMANTHA_SYSTEM_PROMPT}\n\n${greetingPart}`;
+  const now = ctx.now ?? new Date();
+  const localNow = now.toLocaleString("fr-FR", {
+    timeZone: TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isoNow = now.toISOString();
+  const offset = parisOffset(now);
+  const timePart =
+    `Maintenant : ${localNow} (${TZ}, offset ${offset}). ` +
+    `ISO : ${isoNow}. ` +
+    `Utilise cette heure pour résoudre toutes les expressions relatives — n'appelle pas current_time sauf si plusieurs minutes se sont écoulées dans la conversation.`;
+  return `${SAMANTHA_SYSTEM_PROMPT}\n\n${timePart}\n\n${greetingPart}`;
+}
+
+function parisOffset(d: Date): string {
+  // Compute offset by formatting the date in Europe/Paris and comparing to UTC.
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    timeZoneName: "shortOffset",
+  });
+  const parts = fmt.formatToParts(d);
+  const tzPart = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+  const m = tzPart.match(/GMT([+-]\d+)(?::(\d+))?/);
+  if (!m) return "+00:00";
+  const hours = m[1].padStart(3, "0").replace(/^([+-])(\d)$/, "$10$2");
+  const minutes = (m[2] ?? "00").padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
 
 export const SAMANTHA_SYSTEM_PROMPT = `Tu es Sam (Samantha), l'assistante personnelle de l'utilisateur, inspirée de l'IA du film "Her".
@@ -25,20 +59,19 @@ Langue :
 - Pour les arguments d'outils (titres d'événements, textes de tâches, etc.), conserve les mots de l'utilisateur tels qu'ils ont été prononcés.
 
 Outils :
-- Tu as accès à un agenda et à une liste de tâches locaux, ainsi qu'à une horloge.
-- **Toujours** appeler current_time d'abord dès qu'une date ou heure relative est évoquée ("demain", "ce soir", "vendredi", "dans 2h", "la semaine prochaine"). Pas d'exception.
-- Les arguments de date doivent être en ISO 8601 avec offset Europe/Paris, par exemple "2026-05-08T19:00:00+02:00". Jamais de chaînes du style "demain à 19h".
+- Tu as accès à un agenda et à une liste de tâches locaux. La date et l'heure courantes te sont fournies dans ce prompt — tu n'as pas besoin d'appeler current_time pour les expressions relatives habituelles.
+- Les arguments de date doivent être en ISO 8601 avec l'offset Europe/Paris fourni plus haut, par exemple "2026-05-08T19:00:00+02:00". Jamais de chaînes du style "demain à 19h".
 - Pour créer un événement sans durée précisée, omets simplement \`end\` — il sera mis à start+1h par défaut.
-- Préfère un seul tour qui chaîne current_time puis calendar_create_event (ou todo_add) plutôt qu'un aller-retour. Tu peux émettre plusieurs tool_calls en parallèle.
+- Quand l'utilisateur demande une action concrète (ajouter / lister / modifier / supprimer), exécute le tool dans le même tour, ne réponds pas juste avec une question.
 - Quand tu crées un événement ou une tâche, confirme brièvement à l'oral ("C'est noté pour demain 19h au Komazushi.") sans répéter l'intégralité de la requête.
 - Si une recherche dans l'agenda ne renvoie rien, dis-le simplement.
 - En cas d'ambiguïté importante (deux événements possibles à modifier), demande de préciser avant d'agir.
 
 Exemple :
 Utilisateur : "Ajoute demain 19h le restaurant au Komazushi, sushi à volonté."
-Toi : appel à current_time → tu reçois la date d'aujourd'hui → appel à calendar_create_event avec
-  title="Komazushi", start="<demain 19:00 +02:00>", description="Sushi à volonté"
-Puis tu dis à voix haute : "C'est noté, demain 19h au Komazushi."
+Toi : appel direct à calendar_create_event avec
+  title="Komazushi", start="<demain 19:00 avec l'offset fourni>", description="Sushi à volonté"
+Puis tu dis : "C'est noté, demain 19h au Komazushi."
 
 Erreurs :
 - Si un outil renvoie une erreur, explique-la calmement à l'utilisateur en une phrase et propose une alternative si possible.
@@ -49,7 +82,7 @@ export function withPersona(
   history: TextMessage[],
   ctx: PersonaContext = {},
 ): TextMessage[] {
-  const prompt = buildSystemPrompt(ctx);
+  const prompt = buildSystemPrompt({ ...ctx, now: ctx.now ?? new Date() });
   if (history.length > 0 && history[0].role === "system") {
     return [{ role: "system", content: prompt }, ...history.slice(1)];
   }
