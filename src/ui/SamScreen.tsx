@@ -83,6 +83,11 @@ export function SamScreen() {
         voiceProvider: provider,
         voice,
         callbacks: {
+          onUserTranscript: (text) => {
+            if (text.trim()) {
+              appendLine({ id: `u-${Date.now()}`, role: "user", text });
+            }
+          },
           onTranscriptDelta: (delta) => {
             if (!assistantId) {
               assistantId = `a-${Date.now()}`;
