@@ -1,4 +1,9 @@
-import { createTodo, listTodos } from "../../db/todos";
+import {
+  completeTodo,
+  createTodo,
+  deleteTodo,
+  listTodos,
+} from "../../db/todos";
 import { registerTool, type Tool } from "../tools";
 
 interface AddTodoArgs {
@@ -78,3 +83,43 @@ export const listTodosTool: Tool<
 };
 
 registerTool(listTodosTool);
+
+export const completeTodoTool: Tool<
+  { id: number },
+  { ok: boolean; id: number }
+> = {
+  name: "todo_complete",
+  description: "Mark a todo as done by id.",
+  parameters: {
+    type: "object",
+    properties: { id: { type: "number" } },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  execute({ id }) {
+    const row = completeTodo(id);
+    return { ok: !!row, id };
+  },
+};
+
+registerTool(completeTodoTool);
+
+export const deleteTodoTool: Tool<
+  { id: number },
+  { ok: boolean; id: number }
+> = {
+  name: "todo_delete",
+  description: "Delete a todo by id.",
+  parameters: {
+    type: "object",
+    properties: { id: { type: "number" } },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  execute({ id }) {
+    const ok = deleteTodo(id);
+    return { ok, id };
+  },
+};
+
+registerTool(deleteTodoTool);
