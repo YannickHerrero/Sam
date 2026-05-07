@@ -3,7 +3,9 @@ import { StatusBar } from "expo-status-bar";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { bootstrapDatabase } from "./src/db/client";
+import { getApiKey } from "./src/settings/store";
 import { DebugScreen } from "./src/ui/DebugScreen";
+import { OnboardingScreen } from "./src/ui/OnboardingScreen";
 import { SamScreen } from "./src/ui/SamScreen";
 import { SettingsScreen } from "./src/ui/SettingsScreen";
 
@@ -11,25 +13,36 @@ type Screen = "sam" | "debug" | "settings";
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   const [screen, setScreen] = useState<Screen>("sam");
 
   useEffect(() => {
-    bootstrapDatabase();
-    setReady(true);
+    (async () => {
+      bootstrapDatabase();
+      const key = await getApiKey();
+      setNeedsOnboarding(!key);
+      setReady(true);
+    })();
   }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaView style={styles.root}>
         <StatusBar style="light" />
-        <View style={styles.tabs}>
-          <Tab label="Sam" active={screen === "sam"} onPress={() => setScreen("sam")} />
-          <Tab label="Debug" active={screen === "debug"} onPress={() => setScreen("debug")} />
-          <Tab label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
-        </View>
-        {ready && screen === "sam" && <SamScreen />}
-        {ready && screen === "debug" && <DebugScreen />}
-        {ready && screen === "settings" && <SettingsScreen />}
+        {ready && needsOnboarding ? (
+          <OnboardingScreen onDone={() => setNeedsOnboarding(false)} />
+        ) : (
+          <>
+            <View style={styles.tabs}>
+              <Tab label="Sam" active={screen === "sam"} onPress={() => setScreen("sam")} />
+              <Tab label="Debug" active={screen === "debug"} onPress={() => setScreen("debug")} />
+              <Tab label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
+            </View>
+            {ready && screen === "sam" && <SamScreen />}
+            {ready && screen === "debug" && <DebugScreen />}
+            {ready && screen === "settings" && <SettingsScreen />}
+          </>
+        )}
       </SafeAreaView>
     </GestureHandlerRootView>
   );
