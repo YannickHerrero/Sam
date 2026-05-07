@@ -1,3 +1,4 @@
+import { File } from "expo-file-system";
 import type {
   TextMessage,
   ToolCall,
@@ -10,8 +11,6 @@ import type {
 
 const OPENROUTER_CHAT_URL =
   "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_TRANSCRIBE_URL =
-  "https://openrouter.ai/api/v1/audio/transcriptions";
 
 export interface OpenRouterConfig {
   apiKey: string;
@@ -76,24 +75,42 @@ export class OpenRouterProvider implements VoiceProvider {
     audioPath: string,
     signal: AbortSignal | undefined,
   ): Promise<string> {
-    const model = this.config.transcriptionModel ?? "openai/whisper-1";
-    const form = new FormData();
-    form.append("file", {
-      uri: audioPath,
-      name: "recording.m4a",
-      type: "audio/mp4",
-    } as unknown as Blob);
-    form.append("model", model);
-    form.append("language", "fr");
+    const model = this.config.transcriptionModel ?? "google/gemini-2.5-flash";
+    const file = new File(audioPath);
+    const data = await file.base64();
 
-    console.log("[OpenRouter] transcribe", { model, audioPath });
+    const body = {
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Transcris cet audio mot pour mot, en français si possible. " +
+                "Réponds uniquement avec la transcription — pas de préface, pas de guillemets.",
+            },
+            {
+              type: "input_audio",
+              input_audio: { data, format: "mp4" },
+            },
+          ],
+        },
+      ],
+    };
+
+    console.log("[OpenRouter] transcribe", { model, bytes: data.length });
 
     let res: Response;
     try {
-      res = await fetch(OPENROUTER_TRANSCRIBE_URL, {
+      res = await fetch(OPENROUTER_CHAT_URL, {
         method: "POST",
-        headers: { Authorization: `Bearer ${this.config.apiKey}` },
-        body: form,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify(body),
         signal,
       });
     } catch (e) {
@@ -108,9 +125,9 @@ export class OpenRouterProvider implements VoiceProvider {
     }
 
     const json = await res.json();
-    const text: string = json.text ?? "";
+    const text: string = json.choices?.[0]?.message?.content ?? "";
     console.log("[OpenRouter] transcribed:", text);
-    return text;
+    return text.trim();
   }
 
   private async buildRequestBody(input: TurnInput) {
