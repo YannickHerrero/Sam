@@ -53,9 +53,14 @@ export async function runAgentTurn(
       try {
         const result = await executeTool(call.name, call.arguments);
         console.log("[Sam] tool ok", call.name, "→", result);
+        opts.callbacks?.onToolResult?.(call, { ok: true, value: result });
         content = JSON.stringify(result);
       } catch (err) {
         console.error("[Sam] tool failed", call.name, call.arguments, err);
+        opts.callbacks?.onToolResult?.(call, {
+          ok: false,
+          error: String(err),
+        });
         content = JSON.stringify({ error: String(err) });
       }
       history.push({ role: "tool", toolCallId: call.id, content });

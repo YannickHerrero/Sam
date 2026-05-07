@@ -24,6 +24,10 @@ export interface TurnCallbacks {
   onTranscriptDelta?: (delta: string) => void;
   onAudioChunk?: (chunk: Uint8Array) => void;
   onToolCall?: (call: ToolCall) => void;
+  onToolResult?: (
+    call: ToolCall,
+    result: { ok: true; value: unknown } | { ok: false; error: string },
+  ) => void;
 }
 
 export interface TurnInput {
