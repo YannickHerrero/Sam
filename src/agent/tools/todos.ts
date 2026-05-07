@@ -1,4 +1,4 @@
-import { createTodo } from "../../db/todos";
+import { createTodo, listTodos } from "../../db/todos";
 import { registerTool, type Tool } from "../tools";
 
 interface AddTodoArgs {
@@ -40,3 +40,41 @@ export const addTodoTool: Tool<
 };
 
 registerTool(addTodoTool);
+
+interface ListTodosArgs {
+  status?: "open" | "done" | "all";
+}
+
+export const listTodosTool: Tool<
+  ListTodosArgs,
+  Array<{
+    id: number;
+    text: string;
+    due: string | null;
+    priority: number;
+    done: boolean;
+  }>
+> = {
+  name: "todo_list",
+  description:
+    "List todos. status defaults to 'open' (incomplete only). Use 'done' for completed, 'all' for both.",
+  parameters: {
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["open", "done", "all"] },
+    },
+    additionalProperties: false,
+  },
+  execute({ status }) {
+    const rows = listTodos({ status: status ?? "open" });
+    return rows.map((r) => ({
+      id: r.id,
+      text: r.text,
+      due: r.dueAt ? r.dueAt.toISOString() : null,
+      priority: r.priority,
+      done: !!r.doneAt,
+    }));
+  },
+};
+
+registerTool(listTodosTool);
