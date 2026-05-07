@@ -1,4 +1,9 @@
-import { createEvent, listEvents } from "../../db/events";
+import {
+  createEvent,
+  deleteEvent,
+  listEvents,
+  updateEvent,
+} from "../../db/events";
 import { registerTool, type Tool } from "../tools";
 
 interface CreateEventArgs {
@@ -94,3 +99,60 @@ export const listEventsTool: Tool<
 };
 
 registerTool(listEventsTool);
+
+interface UpdateEventArgs {
+  id: number;
+  title?: string;
+  start?: string;
+  end?: string;
+  description?: string;
+  location?: string;
+}
+
+export const updateEventTool: Tool<UpdateEventArgs, { ok: boolean; id: number }> = {
+  name: "calendar_update_event",
+  description:
+    "Update an existing event by id. Only provided fields are changed. Dates must be ISO 8601 if given.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: { type: "number" },
+      title: { type: "string" },
+      start: { type: "string" },
+      end: { type: "string" },
+      description: { type: "string" },
+      location: { type: "string" },
+    },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  execute({ id, title, start, end, description, location }) {
+    const patch: Parameters<typeof updateEvent>[1] = {};
+    if (title !== undefined) patch.title = title;
+    if (start !== undefined) patch.startAt = new Date(start);
+    if (end !== undefined) patch.endAt = new Date(end);
+    if (description !== undefined) patch.description = description;
+    if (location !== undefined) patch.location = location;
+    const row = updateEvent(id, patch);
+    return { ok: !!row, id };
+  },
+};
+
+registerTool(updateEventTool);
+
+export const deleteEventTool: Tool<{ id: number }, { ok: boolean; id: number }> = {
+  name: "calendar_delete_event",
+  description: "Delete a calendar event by id.",
+  parameters: {
+    type: "object",
+    properties: { id: { type: "number" } },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  execute({ id }) {
+    const ok = deleteEvent(id);
+    return { ok, id };
+  },
+};
+
+registerTool(deleteEventTool);
