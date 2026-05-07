@@ -20,6 +20,7 @@ export interface ToolDefinition {
 }
 
 export interface TurnCallbacks {
+  onUserTranscript?: (text: string) => void;
   onTranscriptDelta?: (delta: string) => void;
   onAudioChunk?: (chunk: Uint8Array) => void;
   onToolCall?: (call: ToolCall) => void;

@@ -1,4 +1,3 @@
-import { File } from "expo-file-system";
 import type {
   TextMessage,
   ToolCall,
@@ -9,11 +8,15 @@ import type {
   VoiceProvider,
 } from "./types";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_CHAT_URL =
+  "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_TRANSCRIBE_URL =
+  "https://openrouter.ai/api/v1/audio/transcriptions";
 
 export interface OpenRouterConfig {
   apiKey: string;
   model?: string;
+  transcriptionModel?: string;
   audioFormat?: "pcm16" | "wav" | "mp3";
 }
 
@@ -21,22 +24,27 @@ export class OpenRouterProvider implements VoiceProvider {
   constructor(private readonly config: OpenRouterConfig) {}
 
   async takeTurn(input: TurnInput): Promise<TurnResult> {
-    const body = await this.buildRequestBody(input);
+    let textInput = input.textInput;
+    let userTranscript = "";
+
+    if (input.audioPath) {
+      userTranscript = await this.transcribe(input.audioPath, input.signal);
+      textInput = userTranscript;
+      input.callbacks?.onUserTranscript?.(userTranscript);
+    }
+
+    const body = await this.buildRequestBody({ ...input, textInput, audioPath: undefined });
     console.log("[OpenRouter] request", {
       model: body.model,
       voice: body.audio?.voice,
       messages: body.messages.length,
       tools: body.tools?.length ?? 0,
-      hasAudio: body.messages.some(
-        (m) =>
-          Array.isArray(m.content) &&
-          m.content.some((c) => "type" in c && c.type === "input_audio"),
-      ),
+      userInputChars: textInput?.length ?? 0,
     });
 
     let res: Response;
     try {
-      res = await fetch(OPENROUTER_URL, {
+      res = await fetch(OPENROUTER_CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -60,22 +68,55 @@ export class OpenRouterProvider implements VoiceProvider {
       throw new Error("OpenRouter returned no stream body");
     }
 
-    return parseSseStream(res.body, input.callbacks);
+    const result = await parseSseStream(res.body, input.callbacks);
+    return { ...result, transcript: userTranscript };
+  }
+
+  private async transcribe(
+    audioPath: string,
+    signal: AbortSignal | undefined,
+  ): Promise<string> {
+    const model = this.config.transcriptionModel ?? "openai/whisper-1";
+    const form = new FormData();
+    form.append("file", {
+      uri: audioPath,
+      name: "recording.m4a",
+      type: "audio/mp4",
+    } as unknown as Blob);
+    form.append("model", model);
+    form.append("language", "fr");
+
+    console.log("[OpenRouter] transcribe", { model, audioPath });
+
+    let res: Response;
+    try {
+      res = await fetch(OPENROUTER_TRANSCRIBE_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.config.apiKey}` },
+        body: form,
+        signal,
+      });
+    } catch (e) {
+      console.error("[OpenRouter] transcribe fetch threw:", e);
+      throw e;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[OpenRouter] transcribe error", res.status, text);
+      throw new Error(`OpenRouter ${res.status}: ${text}`);
+    }
+
+    const json = await res.json();
+    const text: string = json.text ?? "";
+    console.log("[OpenRouter] transcribed:", text);
+    return text;
   }
 
   private async buildRequestBody(input: TurnInput) {
     const messages: OpenAiMessage[] = messagesFromHistory(input.history);
 
-    if (input.audioPath) {
-      const file = new File(input.audioPath);
-      const data = await file.base64();
-      messages.push({
-        role: "user",
-        content: [
-          { type: "input_audio", input_audio: { data, format: "m4a" } },
-        ],
-      });
-    } else if (input.textInput) {
+    if (input.textInput) {
       messages.push({ role: "user", content: input.textInput });
     }
 
