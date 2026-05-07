@@ -7,10 +7,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { clearAllData } from "../db/client";
 import {
   getApiKey,
+  getUserFirstName,
   getVoice,
   setApiKey,
+  setUserFirstName,
   setVoice,
   VOICES,
   type Voice,
@@ -20,6 +23,7 @@ export function SettingsScreen() {
   const [apiKey, setApiKeyState] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [voice, setVoiceState] = useState<Voice>("alloy");
+  const [firstName, setFirstName] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   useEffect(() => {
@@ -28,6 +32,8 @@ export function SettingsScreen() {
       setHasKey(!!k);
       const v = (await getVoice()) as Voice;
       setVoiceState(v);
+      const name = await getUserFirstName();
+      setFirstName(name ?? "");
     })();
   }, []);
 
@@ -38,6 +44,7 @@ export function SettingsScreen() {
       setApiKeyState("");
     }
     await setVoice(voice);
+    await setUserFirstName(firstName.trim());
     setSavedAt(Date.now());
   };
 
@@ -71,6 +78,19 @@ export function SettingsScreen() {
         </Pressable>
       ) : null}
 
+      <Text style={[styles.label, { marginTop: 24 }]}>Your first name</Text>
+      <Text style={styles.hint}>
+        Sam will call you by this name occasionally. Leave empty to disable.
+      </Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Yannick"
+        placeholderTextColor="#555"
+        autoCapitalize="words"
+        value={firstName}
+        onChangeText={setFirstName}
+      />
+
       <Text style={[styles.label, { marginTop: 24 }]}>Voice</Text>
       <View style={styles.voiceRow}>
         {VOICES.map((v) => (
@@ -99,6 +119,17 @@ export function SettingsScreen() {
           Saved at {new Date(savedAt).toLocaleTimeString()}
         </Text>
       )}
+
+      <Text style={[styles.label, { marginTop: 32 }]}>Danger zone</Text>
+      <Pressable
+        style={styles.btnDanger}
+        onPress={() => {
+          clearAllData();
+          setSavedAt(Date.now());
+        }}
+      >
+        <Text style={styles.btnText}>Clear all events and todos</Text>
+      </Pressable>
     </ScrollView>
   );
 }

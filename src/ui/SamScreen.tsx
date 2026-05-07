@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { runAgentTurn } from "../agent/loop";
 import { withPersona } from "../agent/persona";
-import { getApiKey, getVoice } from "../settings/store";
+import { getApiKey, getUserFirstName, getVoice } from "../settings/store";
 import { OpenRouterProvider } from "../voice/openrouter";
 import { StreamingAudioPlayer } from "../voice/player";
 import { useMicRecorder } from "../voice/recorder";
@@ -48,6 +48,7 @@ export function SamScreen() {
     }
 
     const voice = await getVoice();
+    const userFirstName = await getUserFirstName();
     const provider = new OpenRouterProvider({ apiKey });
     const player = new StreamingAudioPlayer();
 
@@ -55,7 +56,7 @@ export function SamScreen() {
     try {
       const turn = await runAgentTurn({
         audioPath: result.uri,
-        history: withPersona(historyRef.current),
+        history: withPersona(historyRef.current, { userFirstName }),
         voiceProvider: provider,
         voice,
         callbacks: {

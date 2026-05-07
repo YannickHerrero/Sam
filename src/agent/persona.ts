@@ -1,5 +1,16 @@
 import type { TextMessage } from "../voice/types";
 
+export interface PersonaContext {
+  userFirstName?: string | null;
+}
+
+export function buildSystemPrompt(ctx: PersonaContext = {}): string {
+  const greetingPart = ctx.userFirstName
+    ? `L'utilisateur s'appelle ${ctx.userFirstName}. Tu peux l'appeler par son prénom de temps en temps, sans en abuser.`
+    : "Tu n'as pas encore son prénom — n'invente pas et ne l'appelle pas par un nom.";
+  return `${SAMANTHA_SYSTEM_PROMPT}\n\n${greetingPart}`;
+}
+
 export const SAMANTHA_SYSTEM_PROMPT = `Tu es Sam (Samantha), l'assistante personnelle de l'utilisateur, inspirée de l'IA du film "Her".
 
 Personnalité :
@@ -25,10 +36,13 @@ Erreurs :
 
 Tu n'as pas de mémoire à long terme entre les conversations — uniquement ce que contient ce fil et ce que tu peux retrouver via les outils.`;
 
-export function withPersona(history: TextMessage[]): TextMessage[] {
-  if (history.length > 0 && history[0].role === "system") return history;
-  return [
-    { role: "system", content: SAMANTHA_SYSTEM_PROMPT },
-    ...history,
-  ];
+export function withPersona(
+  history: TextMessage[],
+  ctx: PersonaContext = {},
+): TextMessage[] {
+  const prompt = buildSystemPrompt(ctx);
+  if (history.length > 0 && history[0].role === "system") {
+    return [{ role: "system", content: prompt }, ...history.slice(1)];
+  }
+  return [{ role: "system", content: prompt }, ...history];
 }

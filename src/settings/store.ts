@@ -3,9 +3,22 @@ import * as SecureStore from "expo-secure-store";
 const KEYS = {
   openrouterApiKey: "openrouter_api_key",
   voice: "sam_voice",
+  userFirstName: "sam_user_first_name",
 } as const;
 
 const DEFAULT_VOICE = "alloy";
+
+export async function getUserFirstName(): Promise<string | null> {
+  return SecureStore.getItemAsync(KEYS.userFirstName);
+}
+
+export async function setUserFirstName(value: string): Promise<void> {
+  if (!value) {
+    await SecureStore.deleteItemAsync(KEYS.userFirstName);
+    return;
+  }
+  await SecureStore.setItemAsync(KEYS.userFirstName, value);
+}
 
 export async function getApiKey(): Promise<string | null> {
   return SecureStore.getItemAsync(KEYS.openrouterApiKey);

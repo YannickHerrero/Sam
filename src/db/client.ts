@@ -5,6 +5,10 @@ const sqlite = SQLite.openDatabaseSync("sam.db");
 
 export const db = drizzle(sqlite);
 
+export function clearAllData(): void {
+  sqlite.execSync("DELETE FROM events; DELETE FROM todos;");
+}
+
 export function bootstrapDatabase(): void {
   sqlite.execSync("PRAGMA journal_mode = WAL;");
   sqlite.execSync("PRAGMA foreign_keys = ON;");
