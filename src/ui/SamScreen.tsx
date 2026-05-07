@@ -42,6 +42,7 @@ export function SamScreen() {
       await recorder.start();
       setOrbState("listening");
     } catch (e) {
+      console.error("[Sam] mic start failed:", e);
       setError(`Mic: ${String(e)}`);
     }
   }, [recorder]);
@@ -68,6 +69,12 @@ export function SamScreen() {
     const provider = new OpenRouterProvider({ apiKey });
     const player = new StreamingAudioPlayer();
 
+    console.log("[Sam] turn start", {
+      audioUri: result.uri,
+      voice,
+      historyLen: historyRef.current.length,
+    });
+
     let assistantId: string | null = null;
     try {
       const turn = await runAgentTurn({
@@ -89,13 +96,21 @@ export function SamScreen() {
             }
           },
           onAudioChunk: (chunk) => player.append(chunk),
+          onToolCall: (call) =>
+            console.log("[Sam] tool call:", call.name, call.arguments),
         },
       });
 
+      console.log("[Sam] turn done", {
+        replyLen: turn.reply.length,
+        historyLen: turn.history.length,
+      });
       historyRef.current = turn.history;
       setOrbState("speaking");
       await player.finishAndPlay();
     } catch (e) {
+      console.error("[Sam] turn failed:", e);
+      if (e instanceof Error && e.stack) console.error(e.stack);
       setError(humanizeError(e));
     } finally {
       setOrbState("idle");
