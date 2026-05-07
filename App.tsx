@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { bootstrapDatabase } from "./src/db/client";
 import { DebugScreen } from "./src/ui/DebugScreen";
+import { SamScreen } from "./src/ui/SamScreen";
 import { SettingsScreen } from "./src/ui/SettingsScreen";
 
-type Screen = "debug" | "settings";
+type Screen = "sam" | "debug" | "settings";
 
 export default function App() {
   const [ready, setReady] = useState(false);
-  const [screen, setScreen] = useState<Screen>("debug");
+  const [screen, setScreen] = useState<Screen>("sam");
 
   useEffect(() => {
     bootstrapDatabase();
@@ -17,15 +19,19 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
-      <View style={styles.tabs}>
-        <Tab label="Debug" active={screen === "debug"} onPress={() => setScreen("debug")} />
-        <Tab label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
-      </View>
-      {ready && screen === "debug" && <DebugScreen />}
-      {ready && screen === "settings" && <SettingsScreen />}
-    </SafeAreaView>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaView style={styles.root}>
+        <StatusBar style="light" />
+        <View style={styles.tabs}>
+          <Tab label="Sam" active={screen === "sam"} onPress={() => setScreen("sam")} />
+          <Tab label="Debug" active={screen === "debug"} onPress={() => setScreen("debug")} />
+          <Tab label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
+        </View>
+        {ready && screen === "sam" && <SamScreen />}
+        {ready && screen === "debug" && <DebugScreen />}
+        {ready && screen === "settings" && <SettingsScreen />}
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
