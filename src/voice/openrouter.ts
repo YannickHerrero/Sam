@@ -1,0 +1,190 @@
+import { File } from "expo-file-system";
+import type {
+  TextMessage,
+  ToolCall,
+  ToolDefinition,
+  TurnCallbacks,
+  TurnInput,
+  TurnResult,
+  VoiceProvider,
+} from "./types";
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+export interface OpenRouterConfig {
+  apiKey: string;
+  model?: string;
+  audioFormat?: "pcm16" | "wav" | "mp3";
+}
+
+export class OpenRouterProvider implements VoiceProvider {
+  constructor(private readonly config: OpenRouterConfig) {}
+
+  async takeTurn(input: TurnInput): Promise<TurnResult> {
+    const body = await this.buildRequestBody(input);
+    const res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: input.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`OpenRouter ${res.status}: ${text}`);
+    }
+    if (!res.body) {
+      throw new Error("OpenRouter returned no stream body");
+    }
+
+    return parseSseStream(res.body, input.callbacks);
+  }
+
+  private async buildRequestBody(input: TurnInput) {
+    const messages: OpenAiMessage[] = messagesFromHistory(input.history);
+
+    if (input.audioPath) {
+      const file = new File(input.audioPath);
+      const data = await file.base64();
+      messages.push({
+        role: "user",
+        content: [
+          { type: "input_audio", input_audio: { data, format: "m4a" } },
+        ],
+      });
+    } else if (input.textInput) {
+      messages.push({ role: "user", content: input.textInput });
+    }
+
+    return {
+      model: this.config.model ?? "openai/gpt-audio-mini",
+      modalities: ["text", "audio"],
+      audio: {
+        voice: input.voice,
+        format: this.config.audioFormat ?? "pcm16",
+      },
+      stream: true,
+      messages,
+      tools: input.tools.length ? toolsAsOpenAi(input.tools) : undefined,
+    };
+  }
+}
+
+type OpenAiContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | {
+          type: "input_audio";
+          input_audio: { data: string; format: string };
+        }
+    >;
+
+type OpenAiMessage =
+  | { role: "system" | "user" | "assistant"; content: OpenAiContent }
+  | {
+      role: "assistant";
+      content: string;
+      tool_calls: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+    }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+function messagesFromHistory(history: TextMessage[]): OpenAiMessage[] {
+  return history.map((m): OpenAiMessage => {
+    if (m.role === "tool") {
+      return {
+        role: "tool",
+        tool_call_id: m.toolCallId ?? "",
+        content: m.content,
+      };
+    }
+    if (m.role === "assistant" && m.toolCalls?.length) {
+      return {
+        role: "assistant",
+        content: m.content,
+        tool_calls: m.toolCalls.map((c) => ({
+          id: c.id,
+          type: "function",
+          function: { name: c.name, arguments: JSON.stringify(c.arguments) },
+        })),
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+
+function toolsAsOpenAi(tools: ToolDefinition[]) {
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}
+
+async function parseSseStream(
+  stream: ReadableStream<Uint8Array>,
+  callbacks: TurnCallbacks | undefined,
+): Promise<TurnResult> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  let transcript = "";
+  let reply = "";
+  const toolCalls: ToolCall[] = [];
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let lineEnd: number;
+    while ((lineEnd = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, lineEnd).trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(payload);
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        if (typeof delta.content === "string" && delta.content.length > 0) {
+          reply += delta.content;
+          callbacks?.onTranscriptDelta?.(delta.content);
+        }
+        if (delta.audio?.transcript) {
+          reply += delta.audio.transcript;
+          callbacks?.onTranscriptDelta?.(delta.audio.transcript);
+        }
+        if (delta.audio?.data) {
+          const bytes = base64ToBytes(delta.audio.data);
+          callbacks?.onAudioChunk?.(bytes);
+        }
+      } catch {
+        // ignore malformed line
+      }
+    }
+  }
+
+  return { transcript, reply, toolCalls };
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = globalThis.atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
