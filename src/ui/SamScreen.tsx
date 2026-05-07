@@ -11,6 +11,19 @@ import type { TextMessage } from "../voice/types";
 import { Orb, type OrbState } from "./Orb";
 import { Transcript, type TranscriptLine } from "./Transcript";
 
+function humanizeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/Network request failed|TypeError: Network/i.test(msg)) {
+    return "Pas de réseau. Vérifiez votre connexion.";
+  }
+  if (/OpenRouter 401/.test(msg)) return "Clé API refusée — vérifiez-la.";
+  if (/OpenRouter 429/.test(msg)) return "Trop de requêtes — patientez un instant.";
+  if (/OpenRouter 5\d\d/.test(msg)) return "OpenRouter est en panne. Réessayez plus tard.";
+  if (/OpenRouter 4\d\d/.test(msg)) return `Requête refusée: ${msg}`;
+  if (/abort/i.test(msg)) return "Annulé.";
+  return msg.length > 140 ? msg.slice(0, 140) + "…" : msg;
+}
+
 export function SamScreen() {
   const recorder = useMicRecorder();
   const [orbState, setOrbState] = useState<OrbState>("idle");
@@ -44,8 +57,9 @@ export function SamScreen() {
 
     const apiKey = await getApiKey();
     if (!apiKey) {
-      setError("Set your OpenRouter API key in Settings.");
+      setError("Clé API manquante — onglet Settings.");
       setOrbState("idle");
+      deactivateKeepAwake("sam-turn");
       return;
     }
 
@@ -82,7 +96,7 @@ export function SamScreen() {
       setOrbState("speaking");
       await player.finishAndPlay();
     } catch (e) {
-      setError(String(e));
+      setError(humanizeError(e));
     } finally {
       setOrbState("idle");
       deactivateKeepAwake("sam-turn");
@@ -91,7 +105,7 @@ export function SamScreen() {
 
   useEffect(() => {
     if (recorder.permissionGranted === false) {
-      setError("Microphone permission denied.");
+      setError("Micro refusé — autorisez Sam dans les réglages Android.");
     }
   }, [recorder.permissionGranted]);
 
