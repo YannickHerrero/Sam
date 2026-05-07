@@ -40,6 +40,7 @@ const config: ExpoConfig = {
       },
     ],
     "expo-secure-store",
+    "./plugins/with-sam-overlay",
   ],
 };
 
