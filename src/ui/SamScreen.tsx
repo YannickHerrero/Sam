@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { runAgentTurn } from "../agent/loop";
 import { withPersona } from "../agent/persona";
 import { getApiKey, getUserFirstName, getVoice } from "../settings/store";
@@ -92,23 +92,31 @@ export function SamScreen() {
     }
   }, [recorder.permissionGranted]);
 
+  const dismiss = useCallback(() => {
+    if (orbState !== "idle") return;
+    BackHandler.exitApp();
+  }, [orbState]);
+
   return (
     <View style={styles.root}>
-      <View style={styles.transcriptArea}>
-        <Transcript lines={lines} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+      <View style={styles.card} pointerEvents="box-none">
+        <View style={styles.transcriptArea}>
+          <Transcript lines={lines} />
+        </View>
+        <Pressable
+          style={styles.orbZone}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          delayLongPress={150}
+        >
+          <Orb state={orbState} />
+          <Text style={styles.hint}>
+            {orbState === "idle" ? "Maintenez pour parler" : ""}
+          </Text>
+        </Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
-      <Pressable
-        style={styles.orbZone}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        delayLongPress={150}
-      >
-        <Orb state={orbState} />
-        <Text style={styles.hint}>
-          {orbState === "idle" ? "Maintenez pour parler" : ""}
-        </Text>
-      </Pressable>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -116,28 +124,42 @@ export function SamScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
+  },
+  card: {
+    marginHorizontal: 16,
+    marginBottom: 32,
     paddingVertical: 24,
+    paddingHorizontal: 8,
+    borderRadius: 28,
+    backgroundColor: "rgba(15, 15, 22, 0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 8 },
   },
   transcriptArea: {
-    flex: 1,
+    minHeight: 120,
     justifyContent: "flex-end",
+    marginBottom: 8,
   },
   orbZone: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 24,
+    paddingVertical: 16,
   },
   hint: {
     color: "#777",
     fontSize: 13,
-    marginTop: 18,
+    marginTop: 14,
   },
   error: {
     color: "#ff6b6b",
     textAlign: "center",
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingTop: 8,
     fontSize: 13,
   },
 });
