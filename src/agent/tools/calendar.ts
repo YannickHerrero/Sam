@@ -1,4 +1,4 @@
-import { createEvent } from "../../db/events";
+import { createEvent, listEvents } from "../../db/events";
 import { registerTool, type Tool } from "../tools";
 
 interface CreateEventArgs {
@@ -52,3 +52,45 @@ export const createEventTool: Tool<CreateEventArgs, { id: number; title: string;
 };
 
 registerTool(createEventTool);
+
+interface ListEventsArgs {
+  from?: string;
+  to?: string;
+}
+
+export const listEventsTool: Tool<
+  ListEventsArgs,
+  Array<{
+    id: number;
+    title: string;
+    start: string;
+    end: string | null;
+    location: string | null;
+  }>
+> = {
+  name: "calendar_list_events",
+  description:
+    "List events in an optional date range. Both bounds are ISO 8601 and inclusive on the start side. Omit to list everything upcoming.",
+  parameters: {
+    type: "object",
+    properties: {
+      from: { type: "string", description: "Start of range, ISO 8601" },
+      to: { type: "string", description: "End of range, ISO 8601" },
+    },
+    additionalProperties: false,
+  },
+  execute({ from, to }) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    const rows = listEvents({ from: fromDate, to: toDate });
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      start: r.startAt.toISOString(),
+      end: r.endAt ? r.endAt.toISOString() : null,
+      location: r.location,
+    }));
+  },
+};
+
+registerTool(listEventsTool);
