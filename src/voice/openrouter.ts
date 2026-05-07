@@ -22,21 +22,41 @@ export class OpenRouterProvider implements VoiceProvider {
 
   async takeTurn(input: TurnInput): Promise<TurnResult> {
     const body = await this.buildRequestBody(input);
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: input.signal,
+    console.log("[OpenRouter] request", {
+      model: body.model,
+      voice: body.audio?.voice,
+      messages: body.messages.length,
+      tools: body.tools?.length ?? 0,
+      hasAudio: body.messages.some(
+        (m) =>
+          Array.isArray(m.content) &&
+          m.content.some((c) => "type" in c && c.type === "input_audio"),
+      ),
     });
+
+    let res: Response;
+    try {
+      res = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: input.signal,
+      });
+    } catch (e) {
+      console.error("[OpenRouter] fetch threw:", e);
+      throw e;
+    }
 
     if (!res.ok) {
       const text = await res.text();
+      console.error("[OpenRouter] http error", res.status, text);
       throw new Error(`OpenRouter ${res.status}: ${text}`);
     }
     if (!res.body) {
+      console.error("[OpenRouter] no stream body in response");
       throw new Error("OpenRouter returned no stream body");
     }
 
@@ -162,8 +182,20 @@ async function parseSseStream(
       const payload = line.slice(5).trim();
       if (payload === "[DONE]") continue;
 
+      let chunk: any;
       try {
-        const chunk = JSON.parse(payload);
+        chunk = JSON.parse(payload);
+      } catch (e) {
+        console.warn("[OpenRouter] malformed sse line:", payload.slice(0, 200));
+        continue;
+      }
+      try {
+        if (chunk.error) {
+          console.error("[OpenRouter] stream error:", chunk.error);
+          throw new Error(
+            `OpenRouter stream error: ${JSON.stringify(chunk.error)}`,
+          );
+        }
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
@@ -195,8 +227,14 @@ async function parseSseStream(
           if (td.function?.name) acc.name = td.function.name;
           if (td.function?.arguments) acc.argsBuffer += td.function.arguments;
         }
-      } catch {
-        // ignore malformed line
+      } catch (e) {
+        if (
+          e instanceof Error &&
+          e.message.startsWith("OpenRouter stream error")
+        ) {
+          throw e;
+        }
+        console.warn("[OpenRouter] sse handler error:", e);
       }
     }
   }
