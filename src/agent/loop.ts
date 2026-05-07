@@ -52,8 +52,10 @@ export async function runAgentTurn(
       let content: string;
       try {
         const result = await executeTool(call.name, call.arguments);
+        console.log("[Sam] tool ok", call.name, "→", result);
         content = JSON.stringify(result);
       } catch (err) {
+        console.error("[Sam] tool failed", call.name, call.arguments, err);
         content = JSON.stringify({ error: String(err) });
       }
       history.push({ role: "tool", toolCallId: call.id, content });
