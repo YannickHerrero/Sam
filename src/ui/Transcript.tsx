@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export interface TranscriptLine {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   text: string;
 }
 
@@ -30,14 +30,16 @@ export function Transcript({ lines, maxVisible = 4 }: TranscriptProps) {
         {visible.map((line, i) => {
           const distanceFromTop = visible.length - 1 - i;
           const opacity = Math.max(0.25, 1 - distanceFromTop * 0.22);
+          const roleStyle =
+            line.role === "user"
+              ? styles.user
+              : line.role === "tool"
+                ? styles.tool
+                : styles.assistant;
           return (
             <Text
               key={line.id}
-              style={[
-                styles.line,
-                line.role === "user" ? styles.user : styles.assistant,
-                { opacity },
-              ]}
+              style={[styles.line, roleStyle, { opacity }]}
             >
               {line.text}
             </Text>
@@ -64,4 +66,5 @@ const styles = StyleSheet.create({
   },
   user: { color: "#9bc8ff", fontStyle: "italic" },
   assistant: { color: "#fff" },
+  tool: { color: "#7ec894", fontSize: 13 },
 });

@@ -11,6 +11,52 @@ import type { TextMessage } from "../voice/types";
 import { Orb, type OrbState } from "./Orb";
 import { Transcript, type TranscriptLine } from "./Transcript";
 
+function formatToolResult(
+  call: { name: string; arguments: Record<string, unknown> },
+  result: { ok: true; value: unknown } | { ok: false; error: string },
+): string {
+  if (!result.ok) return `✗ ${call.name} : ${result.error}`;
+  const v = result.value as Record<string, unknown>;
+  switch (call.name) {
+    case "calendar_create_event": {
+      const start = typeof v.start === "string" ? new Date(v.start) : null;
+      const when = start
+        ? start.toLocaleString("fr-FR", {
+            timeZone: "Europe/Paris",
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
+      return `✓ Ajouté : ${v.title ?? ""} — ${when}`;
+    }
+    case "calendar_update_event":
+      return `✓ Événement mis à jour (#${v.id ?? "?"})`;
+    case "calendar_delete_event":
+      return `✓ Événement supprimé (#${v.id ?? "?"})`;
+    case "calendar_list_events": {
+      const n = Array.isArray(result.value) ? result.value.length : 0;
+      return `✓ ${n} événement${n > 1 ? "s" : ""} trouvé${n > 1 ? "s" : ""}`;
+    }
+    case "todo_add":
+      return `✓ Tâche ajoutée : ${v.text ?? ""}`;
+    case "todo_complete":
+      return `✓ Tâche terminée (#${v.id ?? "?"})`;
+    case "todo_delete":
+      return `✓ Tâche supprimée (#${v.id ?? "?"})`;
+    case "todo_list": {
+      const n = Array.isArray(result.value) ? result.value.length : 0;
+      return `✓ ${n} tâche${n > 1 ? "s" : ""}`;
+    }
+    case "current_time":
+      return "";
+    default:
+      return `✓ ${call.name}`;
+  }
+}
+
 function humanizeError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (/Network request failed|TypeError: Network/i.test(msg)) {
@@ -103,6 +149,16 @@ export function SamScreen() {
           onAudioChunk: (chunk) => player.append(chunk),
           onToolCall: (call) =>
             console.log("[Sam] tool call:", call.name, call.arguments),
+          onToolResult: (call, result) => {
+            const text = formatToolResult(call, result);
+            if (text) {
+              appendLine({
+                id: `t-${call.id}-${Date.now()}`,
+                role: "tool",
+                text,
+              });
+            }
+          },
         },
       });
 
