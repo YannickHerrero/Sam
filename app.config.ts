@@ -42,6 +42,11 @@ const config: ExpoConfig = {
     "expo-secure-store",
     "./plugins/with-sam-overlay",
   ],
+  extra: {
+    eas: {
+      projectId: "6c1332a3-c9f9-4ca3-b18b-85601f6482b1",
+    },
+  },
 };
 
 export default config;
