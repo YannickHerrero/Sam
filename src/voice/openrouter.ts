@@ -131,6 +131,12 @@ function toolsAsOpenAi(tools: ToolDefinition[]) {
   }));
 }
 
+interface ToolCallAcc {
+  id: string;
+  name: string;
+  argsBuffer: string;
+}
+
 async function parseSseStream(
   stream: ReadableStream<Uint8Array>,
   callbacks: TurnCallbacks | undefined,
@@ -141,7 +147,7 @@ async function parseSseStream(
 
   let transcript = "";
   let reply = "";
-  const toolCalls: ToolCall[] = [];
+  const toolAcc: Map<number, ToolCallAcc> = new Map();
 
   while (true) {
     const { value, done } = await reader.read();
@@ -173,13 +179,45 @@ async function parseSseStream(
           const bytes = base64ToBytes(delta.audio.data);
           callbacks?.onAudioChunk?.(bytes);
         }
+
+        const tcDeltas: Array<{
+          index: number;
+          id?: string;
+          function?: { name?: string; arguments?: string };
+        }> = delta.tool_calls ?? [];
+        for (const td of tcDeltas) {
+          let acc = toolAcc.get(td.index);
+          if (!acc) {
+            acc = { id: td.id ?? "", name: "", argsBuffer: "" };
+            toolAcc.set(td.index, acc);
+          }
+          if (td.id) acc.id = td.id;
+          if (td.function?.name) acc.name = td.function.name;
+          if (td.function?.arguments) acc.argsBuffer += td.function.arguments;
+        }
       } catch {
         // ignore malformed line
       }
     }
   }
 
+  const toolCalls: ToolCall[] = [...toolAcc.values()].map((a) => ({
+    id: a.id,
+    name: a.name,
+    arguments: safeParseJson(a.argsBuffer),
+  }));
+  for (const call of toolCalls) callbacks?.onToolCall?.(call);
+
   return { transcript, reply, toolCalls };
+}
+
+function safeParseJson(s: string): Record<string, unknown> {
+  if (!s) return {};
+  try {
+    return JSON.parse(s) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 function base64ToBytes(b64: string): Uint8Array {
