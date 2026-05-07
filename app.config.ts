@@ -30,7 +30,17 @@ const config: ExpoConfig = {
   web: {
     favicon: "./assets/favicon.png",
   },
-  plugins: ["expo-sqlite"],
+  plugins: [
+    "expo-sqlite",
+    [
+      "expo-audio",
+      {
+        microphonePermission:
+          "Sam a besoin du microphone pour vous écouter et discuter avec vous.",
+      },
+    ],
+    "expo-secure-store",
+  ],
 };
 
 export default config;
